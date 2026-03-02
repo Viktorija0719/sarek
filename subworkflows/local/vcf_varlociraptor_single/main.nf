@@ -83,22 +83,21 @@ workflow VCF_VARLOCIRAPTOR_SINGLE {
     //
     // CALL VARIANTS WITH VARLOCIRAPTOR
     //
-
-    // Map scenario -> sample id
+    // Map scenario -> sample id (ONE per sample)
     ch_scenario_by_id = ch_scenario_file.map { meta, scenario -> [ meta.id, scenario ] }
 
-    // Map preprocessed BCF -> sample id
+    // Map preprocessed BCF -> sample id (MANY per sample: per variantcaller + chunk)
     ch_preproc_by_id = VARLOCIRAPTOR_PREPROCESS.out.bcf.map { meta, bcf -> [ meta.id, meta, bcf ] }
 
-    // Join so each chunk gets the right scenario for its sample
+    // MANY-to-ONE combine: replicate scenario for every preprocessed bcf
     ch_for_callvariants = ch_preproc_by_id
-        .join(ch_scenario_by_id, by: 0, failOnMismatch: true, failOnDuplicate: true)
+        .combine(ch_scenario_by_id, by: 0)
         .map { _id, meta, bcf, scenario -> [ [meta, bcf], scenario ] }
 
     VARLOCIRAPTOR_CALLVARIANTS(
-        ch_for_callvariants.map { it[0] },   // tuple(meta), path(observation_bcf)
+        ch_for_callvariants.map { it[0] },   // tuple(meta), path(bcf)
         ch_for_callvariants.map { it[1] },   // path(scenario)
-        val_sampletype,                      // 'normal' or 'tumor'
+        val_sampletype
     )
 
     ch_versions = ch_versions.mix(VARLOCIRAPTOR_CALLVARIANTS.out.versions)

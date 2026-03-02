@@ -208,20 +208,19 @@ workflow VCF_VARLOCIRAPTOR_SOMATIC {
             [meta_normal, [normal_bcf, tumor_bcf]]
         }
 
-    ch_scenario_by_id = ch_scenario_file.map { meta, scenario -> [ meta.id, scenario ] }
 
-    ch_call_by_id = ch_vcf_for_callvariants.map { meta, vcfs -> [ meta.id, meta, vcfs ] }
+    ch_scenario_by_id = ch_scenario_file.map { meta, scenario -> [ meta.id, scenario ] }
+    ch_call_by_id     = ch_vcf_for_callvariants.map { meta, vcfs -> [ meta.id, meta, vcfs ] }
 
     ch_for_callvariants = ch_call_by_id
-        .join(ch_scenario_by_id, by: 0, failOnMismatch: true, failOnDuplicate: true)
+        .combine(ch_scenario_by_id, by: 0)
         .map { _id, meta, vcfs, scenario -> [ [meta, vcfs], scenario ] }
 
     VARLOCIRAPTOR_CALLVARIANTS(
-        ch_for_callvariants.map { it[0] },              // tuple(meta), path(normal_bcf), path(tumor_bcf)
+        ch_for_callvariants.map { it[0] },              // tuple(meta), path(list-of-bcfs)
         ch_for_callvariants.map { it[1] },              // path(scenario)
-        Channel.value(["normal", "tumor"]),
+        Channel.value(["normal", "tumor"])
     )
-
     ch_versions = ch_versions.mix(VARLOCIRAPTOR_CALLVARIANTS.out.versions)
 
     //
